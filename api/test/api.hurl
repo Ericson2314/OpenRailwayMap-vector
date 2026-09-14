@@ -202,7 +202,7 @@ HTTP 200
 [Asserts]
 jsonpath "$" count == 1
 jsonpath "$[0].name" == "Virchowstraße"
-jsonpath "$[0].references.de-bvg" == "309770"
+jsonpath "$[0].references['de-bvg']" == "309770"
 
 # Facility search for name or reference
 GET {{base_url}}/facility
@@ -591,7 +591,7 @@ jsonpath "$.osm_type" count == 1
 jsonpath "$.osm_type[0]" == "N"
 jsonpath "$.references.uic" == "8089001"
 jsonpath "$.references.station" == "53"
-jsonpath "$.references.railway-ref" == "BALE"
+jsonpath "$.references['railway-ref']" == "BALE"
 jsonpath "$.wikipedia" count == 1
 jsonpath "$.wikipedia[0]" == "de:Bahnhof Berlin Alexanderplatz"
 jsonpath "$.state" == "present"
