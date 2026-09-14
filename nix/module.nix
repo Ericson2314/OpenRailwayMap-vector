@@ -136,6 +136,13 @@ in
       };
     };
 
+    corsOrigin = mkOption {
+      type = types.nullOr types.str;
+      default = null;
+      example = "*";
+      description = "If set, send Access-Control-Allow-Origin with this value for the static files (style, sprites, glyphs), so pages on other origins can embed the map. Tiles and the API already allow any origin.";
+    };
+
     openFirewall = mkOption {
       type = types.bool;
       default = false;
@@ -330,6 +337,7 @@ in
               nginxCacheTtl
               clientCacheTtl
               serverName
+              corsOrigin
               ;
             tilesUpstream = "127.0.0.1:${toString cfg.martinPort}";
             apiUpstream = "127.0.0.1:${toString cfg.apiPort}";

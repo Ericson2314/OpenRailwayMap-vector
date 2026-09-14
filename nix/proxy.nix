@@ -37,6 +37,7 @@ let
       cacheDir ? "/var/cache/nginx/",
       resolver ? "127.0.0.1",
       serverName ? "localhost",
+      corsOrigin ? null, # e.g. "*": let pages on other origins use the style, sprites and glyphs
     }:
     runCommand "openrailwaymap-server.conf"
       {
@@ -58,12 +59,20 @@ let
         CLIENT_CACHE_TTL_TILES_FRESH = toString clientCacheTtl.tilesFresh;
         CLIENT_CACHE_TTL_TILES_STALE = toString clientCacheTtl.tilesStale;
         SERVER_NAME = serverName;
+        # inserted after every `root` line, i.e. in each static-file location; the
+        # proxied tile and API locations get their CORS headers from Martin and the API
+        CORS_LINE =
+          if corsOrigin == null then
+            ""
+          else
+            "add_header Access-Control-Allow-Origin \"${corsOrigin}\" always;";
       }
       ''
         NEWS_HASH="$(grep '<h5>' ${public}/news.html | sha1sum - | awk '{print $1}')"
         export NEWS_HASH
         sed -e '/listen .*443/d' \
             -e 's|X-Rewrite-URL $uri;|X-Rewrite-URL $request_uri;|' \
+            -e 's|^\(\s*\)root \(.*\);|\1root \2;\n\1''${CORS_LINE}|' \
             -e '/ssl_certificate/d' \
             -e 's|/etc/nginx/public|${public}|g' \
             -e 's|include mime.types;|include ${nginx}/conf/mime.types;|' \
@@ -72,7 +81,7 @@ let
             -e 's|listen \[::\]:8000|listen [::]:''${PROXY_PORT}|' \
             -e 's|server_name localhost;|server_name ''${SERVER_NAME};|' \
             ${src}/proxy/proxy.conf.template \
-          | envsubst '$NGINX_RESOLVER $NGINX_CACHE_DIR $PROXY_PORT $TILES_UPSTREAM $API_UPSTREAM $PUBLIC_PROTOCOL $PUBLIC_HOST $NGINX_CACHE_TTL $NEWS_HASH $SERVER_NAME $CLIENT_CACHE_TTL_ASSETS_FRESH $CLIENT_CACHE_TTL_ASSETS_STALE $CLIENT_CACHE_TTL_API_FRESH $CLIENT_CACHE_TTL_API_STALE $CLIENT_CACHE_TTL_TILES_FRESH $CLIENT_CACHE_TTL_TILES_STALE' \
+          | envsubst '$CORS_LINE $NGINX_RESOLVER $NGINX_CACHE_DIR $PROXY_PORT $TILES_UPSTREAM $API_UPSTREAM $PUBLIC_PROTOCOL $PUBLIC_HOST $NGINX_CACHE_TTL $NEWS_HASH $SERVER_NAME $CLIENT_CACHE_TTL_ASSETS_FRESH $CLIENT_CACHE_TTL_ASSETS_STALE $CLIENT_CACHE_TTL_API_FRESH $CLIENT_CACHE_TTL_API_STALE $CLIENT_CACHE_TTL_TILES_FRESH $CLIENT_CACHE_TTL_TILES_STALE' \
           > $out
       '';
 in

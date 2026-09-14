@@ -7,6 +7,8 @@
     enable = true;
     osmDownloadUrl = "https://download.geofabrik.de/north-america/us/new-york-latest.osm.pbf";
     openFirewall = true;
+    # development: let pages on other origins (e.g. overlays) use the map
+    corsOrigin = "*";
     # development: never serve stale tiles or TileJSON
     nginxCacheTtl = 0;
     clientCacheTtl = {

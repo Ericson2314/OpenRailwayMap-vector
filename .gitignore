@@ -22,3 +22,5 @@ taginfo.json
 /.vs
 result
 result-*
+# left behind by `nixos-container ... --flake`
+.tmp
