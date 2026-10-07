@@ -10,7 +10,7 @@ let
   callPackage = lib.callPackageWith (pkgs // { inherit src; });
   node-deps = callPackage ./node-deps.nix { };
   generated = callPackage ./generated.nix { inherit node-deps; };
-  proxy = callPackage ./proxy.nix { inherit generated; };
+  proxy = callPackage ./proxy.nix { inherit generated node-deps; };
 in
 {
   inherit node-deps generated;

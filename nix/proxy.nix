@@ -10,12 +10,19 @@
   nginx,
   src,
   generated,
+  node-deps,
 }:
 let
+  # The site's files, the generated ones, and the MapLibre style spec, which
+  # overlays load from js/node_modules (see index.html's import map); the files
+  # copied from the store are read-only, hence the chmod before adding it.
   public = runCommand "openrailwaymap-public" { } ''
     mkdir -p $out
     cp -r ${src}/proxy/{manifest.json,index.html,news.html,api,js,css,image,font} $out/
     cp ${generated}/{style.json,legend.json,taginfo.json,preset.zip} $out/
+    chmod -R u+w $out/js
+    mkdir -p $out/js/node_modules/@maplibre
+    cp -r ${node-deps}/node_modules/@maplibre/maplibre-gl-style-spec $out/js/node_modules/@maplibre/
   '';
   # The values default to compose.yaml's development settings.
   serverConf =
