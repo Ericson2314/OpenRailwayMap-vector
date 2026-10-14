@@ -11,8 +11,8 @@ let
   # assert on current Berlin data, so bump the date together with them
   # (Geofabrik keeps dated files for a limited time).
   berlin = pkgs.fetchurl {
-    url = "https://download.geofabrik.de/europe/germany/berlin-260913.osm.pbf";
-    hash = "sha256-gGgw9qeHbnUP9EqEJ+2IiC12pP88V3s+AmsJS9obt6Y=";
+    url = "https://download.geofabrik.de/europe/germany/berlin-261013.osm.pbf";
+    hash = "sha256-BzUJQz7feZEoN0OhMNKqS9gVDP86rnq1VtnxgAn6aKU=";
   };
   # The API's /wikidata and /wikimedia endpoints call www.wikidata.org, which
   # the sandboxed test container cannot reach. The responses the test suite depends
