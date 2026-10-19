@@ -1,0 +1,41 @@
+"$id": "https://openrailwaymap.app/schema/overlay.yaml"
+# draft-07, as the GeoJSON schema it refers to
+"$schema": "http://json-schema.org/draft-07/schema#"
+title: OpenRailwayMap overlay
+description: >-
+  A patch to a vector tile map, such as a proposal for new infrastructure: for each tile layer
+  (`source-layer`) it changes, the features added to that layer and the existing features removed
+  from it.
+type: object
+propertyNames:
+  minLength: 1
+additionalProperties:
+  description: >-
+    The member name is the name of the tile layer. The member value is the patch to that tile
+    layer.
+  type: object
+  properties:
+    added:
+      description: >-
+        The features added to the tile layer, with the properties that layer's features have.
+      # in an `allOf`, as draft-07 ignores the keywords beside a `$ref`
+      allOf:
+        - "$ref": "https://geojson.org/schema/FeatureCollection.json"
+    removed:
+      description: >-
+        The existing features removed from the tile layer. Each is identified by its `id`, as the
+        map identifies features (e.g. a vector tile feature id, or an id property); all the ids of
+        a tile layer are numbers, or all are strings. The rest of a removed feature (its geometry
+        and properties, or null) records the feature as the overlay was made against, so that an
+        overlay whose removed features no longer match the map's data can be noticed and updated.
+      allOf:
+        - "$ref": "https://geojson.org/schema/FeatureCollection.json"
+        - type: object
+          properties:
+            features:
+              type: array
+              items:
+                type: object
+                required:
+                  - id
+  additionalProperties: false

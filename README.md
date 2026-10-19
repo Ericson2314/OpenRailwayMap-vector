@@ -37,6 +37,39 @@ The API has been adapted from [the OpenRailwayMap API](https://github.com/OpenRa
 
 The API documentation can be found at https://openrailwaymap.app/api.html. You can also view [the raw OpenAPI specification](proxy/api/openapi.yaml).
 
+## Overlays
+
+An overlay patches the map's data, for example with a proposal for new infrastructure. Paste it into the overlay field of the configuration, or put it in the page URL as `#overlay-base64=<base64>` (URL-encoded base64 of the overlay's JSON text, or of its gzip, which keeps the link short; the field does that). The overlay is part of the page URL, so links to it can be shared, and nothing needs to be hosted.
+
+An overlay is an object keyed by tile layer, each value the patch to that layer: `added`, a GeoJSON FeatureCollection of new features, and `removed`, one of the existing features the overlay replaces. The map applies the patch to its vector tiles as they load, with the `union` and `difference` source types of the MapLibre GL JS it is built with. Added features carry the properties that tile layer's features have, so they are drawn by the map's own style as tiled data, including in the popup shown when one is clicked. For example a proposed track replacing an existing one, a station and a platform:
+
+```json
+{
+  "railway_line_high": {
+    "added": {"type": "FeatureCollection", "features": [
+      {"type": "Feature", "properties": {"feature": "rail", "state": "proposed", "usage": "main", "highspeed": false, "name": "New line"}, "geometry": {"type": "LineString", "coordinates": [[4.9, 52.37], [4.95, 52.38]]}}
+    ]},
+    "removed": {"type": "FeatureCollection", "features": [
+      {"type": "Feature", "id": 123456, "properties": {"railway": "rail", "usage": "main"}, "geometry": {"type": "LineString", "coordinates": [[4.9, 52.37], [4.94, 52.375], [4.95, 52.38]]}}
+    ]}
+  },
+  "standard_railway_grouped_stations": {
+    "added": {"type": "FeatureCollection", "features": [
+      {"type": "Feature", "properties": {"feature": "station", "state": "proposed", "station_size": "medium", "name": "New station", "label": "New station"}, "geometry": {"type": "Polygon", "coordinates": [[[4.92, 52.374], [4.93, 52.374], [4.93, 52.376], [4.92, 52.376], [4.92, 52.374]]]}}
+    ]}
+  },
+  "standard_railway_platforms": {
+    "added": {"type": "FeatureCollection", "features": [
+      {"type": "Feature", "properties": {"feature": "platform", "state": "proposed"}, "geometry": {"type": "Polygon", "coordinates": [[[4.921, 52.3745], [4.929, 52.3745], [4.929, 52.3748], [4.921, 52.3748], [4.921, 52.3745]]]}}
+    ]}
+  }
+}
+```
+
+The tile layers and their properties are those of the [Martin tile functions](martin/configuration.yml); `railway_line_high` (tracks), `standard_railway_grouped_stations` and `standard_railway_text_stations` (stations) and `standard_railway_platforms` are the useful ones. A removed feature is identified by its GeoJSON `id`, the `id` property of the tile layer's features: an OSM id in most layers, a string naming the OSM object in others, such as `node-276233001-train-train-station` for a station or `way-321219461` for a platform; tracks (`railway_line_high`) are identified by OSM way id. An object drawn by several tile layers, such as a station with its labels, must be removed from each of them. The map uses only the ids; the rest of a removed feature (its geometry and properties, or `null`) records what the overlay was made against, so an overlay whose removed features no longer match the data, for example after a way was split, can be noticed and updated.
+
+The format is described by the JSON Schema [features/schema/overlay.yaml](features/schema/overlay.yaml), which refers to the [GeoJSON schema](https://github.com/geojson/schema). Every FeatureCollection in an overlay is plain GeoJSON, so other GeoJSON tools can show what a proposal adds and what it removes.
+
 ## Mapping presets
 
 Presets for [JOSM](https://josm.openstreetmap.de/) and [Vespucci](https://vespucci.io/) are generated for mapping assistance. The preset is available for download on https://openrailwaymap.app/preset.zip. The preset is also available directly from the [Tagging Presets register in JOSM Preferences](https://josm.openstreetmap.de/wiki/Help/Preferences/TaggingPresetPreference). [Vespucci](https://vespucci.io/help/en/Presets/) can use the same presets for mobile mapping.

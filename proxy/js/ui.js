@@ -19,6 +19,7 @@ const backgroundOpacityControl = document.getElementById('backgroundOpacity');
 const backgroundTypeRasterControl = document.getElementById('backgroundTypeRaster');
 const backgroundTypeVectorControl = document.getElementById('backgroundTypeVector');
 const backgroundUrlControl = document.getElementById('backgroundUrl');
+const overlayJsonControl = document.getElementById('overlayJson');
 const backgroundHillShadeDisabledControl = document.getElementById('backgroundHillShadeDisabled');
 const backgroundHillShadeEnabledControl = document.getElementById('backgroundHillShadeEnabled');
 const stationLabelNameControl = document.getElementById('stationLabelName');
@@ -302,6 +303,9 @@ function showConfiguration(tab) {
     backgroundTypeVectorControl.checked = true;
   }
   backgroundUrlControl.value = configuration.backgroundUrl ?? defaultConfiguration.backgroundUrl;
+  overlayJsonControl.value = '';
+  overlayJsonControl.setCustomValidity('');
+  overlay.load(overlayParameter?.base64).then(data => { overlayJsonControl.value = data ? JSON.stringify(data) : ''; });
 
   if (configuration.backgroundHillShade ?? defaultConfiguration.backgroundHillShade) {
     backgroundHillShadeEnabledControl.checked = true
@@ -877,6 +881,7 @@ function determineParametersFromHash(hash) {
   return {
     style: updateStyleParameter(hashObject),
     date: determineDateParameter(hashObject.date),
+    overlay: determineOverlayParameter(hashObject),
   }
 }
 
@@ -974,6 +979,24 @@ function updateStyleParameter(hashObject) {
   };
 }
 
+/**
+ * The overlay patching the map: `{base64}` for `overlay-base64=<base64>` (URL encoded; see
+ * overlay.load), or null. Carrying the GeoJSON itself in the link means nothing needs to
+ * be hosted for it to be shared.
+ */
+function determineOverlayParameter(hashObject) {
+  if (!hashObject['overlay-base64']) {
+    return null;
+  }
+  // a link cut short can end in a broken escape
+  try {
+    return {base64: decodeURIComponent(hashObject['overlay-base64'])};
+  } catch (error) {
+    console.error('Error during loading of overlay from the URL', error);
+    return null;
+  }
+}
+
 function determineDateParameter(hashDate) {
   return hashDate === 'all'
     ? 'all'
@@ -1012,6 +1035,7 @@ function putParametersInHash(hash, style, date) {
     }
   })
   hashObject.date = dateControl.isActive() ? date : undefined;
+  hashObject['overlay-base64'] = overlayParameter?.base64 ? encodeURIComponent(overlayParameter.base64) : undefined;
 
   const hashContent = Object.entries(hashObject)
     .filter(([_, value]) => value)
@@ -1494,7 +1518,7 @@ configuration = migrateConfiguration(localStorage, configuration);
 
 let selectedTheme = resolveTheme(configuration.theme ?? defaultConfiguration.theme);
 
-let {style: selectedStyle, date: selectedDate} = determineParametersFromHash(window.location.hash)
+let {style: selectedStyle, date: selectedDate, overlay: overlayParameter} = determineParametersFromHash(window.location.hash)
 
 const backgroundMap = new maplibregl.Map({
   container: 'background-map',
@@ -1518,31 +1542,55 @@ const map = new maplibregl.Map({
   renderWorldCopies: false,
   ...(configuration.view || defaultConfiguration.view),
 });
-map.setStyle(`${location.origin}/style.json`, {
-  validate: false,
-  transformStyle: (previous, next) => {
-    const language = configuredLanguage();
+// The ids of an overlay's removed features: the tile features' `id` property, naming an OSM object
+// (the tiles have no vector tile feature ids), except that tracks are removed by way, as their ids
+// are `<way id>-<segment>`; -1, which no removed feature has, for an id that is not of that form
+const overlayFeatureId = sourceLayer => sourceLayer === 'railway_line_high'
+  ? ['to-number',
+    ['slice', ['to-string', ['get', 'id']], 0, ['index-of', '-', ['to-string', ['get', 'id']]]],
+    -1]
+  : ['get', 'id'];
 
-    rewriteStylePathsToOrigin(next)
-    addLanguageToSupportedSources(next, language)
-    return next;
-  },
-  globalState: {
-    date: selectedDate === 'all' ? defaultDate : selectedDate,
-    allDates: selectedDate === 'all',
-    theme: selectedTheme,
-    bearing: map.getBearing() ?? 0,
-    pitched: pitchedView(map.getPitch() ?? 0),
-    stationLowZoomLabel: configuration.stationLowZoomLabel ?? defaultConfiguration.stationLowZoomLabel,
-    openHistoricalMap: (configuration.historicalInfrastructure ?? defaultConfiguration.historicalInfrastructure) === 'openhistoricalmap',
-    showAbandonedInfrastructure: (configuration.historicalInfrastructure ?? defaultConfiguration.historicalInfrastructure) === 'openstreetmap',
-    showRazedInfrastructure: (configuration.historicalInfrastructure ?? defaultConfiguration.historicalInfrastructure) === 'openstreetmap',
-    showConstructionInfrastructure: ['construction', 'construction-proposed'].includes(configuration.futureInfrastructure ?? defaultConfiguration.futureInfrastructure),
-    showProposedInfrastructure: (configuration.futureInfrastructure ?? defaultConfiguration.futureInfrastructure) === 'construction-proposed',
-    hillshade: configuration.backgroundHillShade ?? defaultConfiguration.backgroundHillShade,
-    ...selectedStyle,
-  },
-});
+// The overlay is put into the style as it loads, patching the style's own sources, which its
+// layers already draw.
+let loadedOverlay = null;
+function loadMapStyle(overlayData, diff = true) {
+  loadedOverlay = overlayData;
+  map.setStyle(`${location.origin}/style.json`, {
+    validate: false,
+    diff,
+    transformStyle: (previous, next) => {
+      const language = configuredLanguage();
+
+      rewriteStylePathsToOrigin(next)
+      addLanguageToSupportedSources(next, language)
+      if (overlayData) {
+        overlay.addToStyle(next, overlayData, {featureId: overlayFeatureId})
+      }
+      return next;
+    },
+    globalState: {
+      date: selectedDate === 'all' ? defaultDate : selectedDate,
+      allDates: selectedDate === 'all',
+      theme: selectedTheme,
+      bearing: map.getBearing() ?? 0,
+      pitched: pitchedView(map.getPitch() ?? 0),
+      stationLowZoomLabel: configuration.stationLowZoomLabel ?? defaultConfiguration.stationLowZoomLabel,
+      openHistoricalMap: (configuration.historicalInfrastructure ?? defaultConfiguration.historicalInfrastructure) === 'openhistoricalmap',
+      showAbandonedInfrastructure: (configuration.historicalInfrastructure ?? defaultConfiguration.historicalInfrastructure) === 'openstreetmap',
+      showRazedInfrastructure: (configuration.historicalInfrastructure ?? defaultConfiguration.historicalInfrastructure) === 'openstreetmap',
+      showConstructionInfrastructure: ['construction', 'construction-proposed'].includes(configuration.futureInfrastructure ?? defaultConfiguration.futureInfrastructure),
+      showProposedInfrastructure: (configuration.futureInfrastructure ?? defaultConfiguration.futureInfrastructure) === 'construction-proposed',
+      hillshade: configuration.backgroundHillShade ?? defaultConfiguration.backgroundHillShade,
+      ...selectedStyle,
+    },
+  });
+}
+if (overlayParameter) {
+  overlay.load(overlayParameter.base64).then(data => loadMapStyle(data));
+} else {
+  loadMapStyle(null);
+}
 
 function selectPreset(preset) {
   styleControl.selectPreset(preset);
@@ -1903,6 +1951,12 @@ class LanguageControl {
           source.setUrl(parsedUrl.href);
         }
       })
+
+    // a source an overlay patches has no URL of its own to set, so the style is loaded anew, which
+    // puts the language in the URLs of the sources it patches
+    if (Object.values(style.sources).some(source => overlay.isPatched(source))) {
+      loadMapStyle(loadedOverlay);
+    }
 
     this.selectedLanguage = language;
   }
@@ -2856,6 +2910,10 @@ const onMapRotate = bearing => {
 }
 
 const onMapPitch = pitch => {
+  // a style still waiting for its overlay gets the pitch as a default when it loads
+  if (!map.style) {
+    return;
+  }
   const pitched = pitchedView(pitch)
   const pitchedState = (map.getGlobalState() ?? {}).pitched
   if (pitched !== pitchedState) {
@@ -2875,6 +2933,8 @@ function openJOSM(josmUrl, osmType, osmId) {
 function popupContent(feature, abortController) {
   const bounds = map.getBounds();
   const editor = configuration.editor ?? defaultConfiguration.editor;
+  // a feature an overlay added is described by its own properties, not by the API
+  const overlaid = overlay.isAdded(feature);
   const layerSource = `${feature.source}${feature.sourceLayer ? `-${feature.sourceLayer}` : ''}`;
 
   const fetchFeatureProperties = (view) => {
@@ -2991,7 +3051,7 @@ function popupContent(feature, abortController) {
   const colorProperty = featureCatalog.colorProperty || 'color';
 
   const propertiesFromView = featureCatalog.view;
-  const properties$ = propertiesFromView
+  const properties$ = propertiesFromView && !overlaid
     ? fetchFeatureProperties(propertiesFromView)
     : Promise.resolve({
       properties: feature.properties,
@@ -3282,6 +3342,27 @@ function popupContent(feature, abortController) {
     });
 
   return popupContainer
+}
+
+/**
+ * The pasted GeoJSON becomes the overlay: gzipped and base64 encoded into the page URL
+ */
+async function setOverlayJson(text) {
+  overlayJsonControl.setCustomValidity('');
+  let data = null;
+  if (text.trim()) {
+    try {
+      data = await overlay.parse(text);
+    } catch (exception) {
+      overlayJsonControl.setCustomValidity(`The overlay cannot be loaded: ${exception.message}`);
+      overlayJsonControl.reportValidity();
+      return;
+    }
+  }
+  overlayParameter = data ? {base64: await overlay.encodeBase64(data)} : null;
+  onPageParametersChange();
+  // the style is loaded anew with the overlay in it
+  loadMapStyle(data, false);
 }
 
 map.on('move', () => backgroundMap.jumpTo({ center: map.getCenter(), zoom: map.getZoom(), bearing: map.getBearing(), pitch: map.getPitch() }));
